@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Wiki extractor
 ---------------------
 
@@ -14,3 +15,7 @@ http://medialab.di.unipi.it/wiki/Wikipedia_Extractor
 
 For example usage, see the tests.
     
+=======
+wikireader
+==========
+>>>>>>> 1388d2609713b83e99d4f6b20af26c556633c116
