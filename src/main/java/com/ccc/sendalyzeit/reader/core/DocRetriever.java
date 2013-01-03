@@ -5,6 +5,5 @@ import java.util.Iterator;
 
 public interface DocRetriever extends Iterator<Document> {
 
-	public Document getNextDocument();
 	
 }

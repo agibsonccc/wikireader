@@ -14,7 +14,7 @@ public class DocumentRetrieverTest {
 	@Test
 	public void testDocumentRetriever() {
 		DocRetriever retriever = new DocumentRetriverImpl( new File( "testdir" ) );
-		assertEquals(true,retriever.getNextDocument() != null );
+		assertEquals(true,retriever.next() != null );
 	}
 	@Test
 	public void testDocumentRetrieverContents() {

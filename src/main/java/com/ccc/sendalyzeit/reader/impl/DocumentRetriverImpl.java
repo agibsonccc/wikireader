@@ -97,8 +97,4 @@ public class DocumentRetriverImpl implements DocRetriever {
 		throw new RuntimeException( " Not implemented " );
 	}
 
-	public Document getNextDocument() {
-		return next();
-	}
-
 }
