@@ -48,7 +48,7 @@ public class DocumentRetriverImpl implements DocRetriever {
 
 	public boolean hasNext() {
 		//current file                             current directory                 docs in buffer
-		return currFileIndex < currFiles.length || currDirIndex < subDirs.length || !docs.isEmpty();
+		return currFiles ==  null || subDirs == null || currFileIndex < currFiles.length || currDirIndex < subDirs.length || !docs.isEmpty();
 	}
 
 	public Document next() {

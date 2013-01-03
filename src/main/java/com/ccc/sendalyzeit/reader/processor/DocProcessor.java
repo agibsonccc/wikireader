@@ -3,6 +3,8 @@ package com.ccc.sendalyzeit.reader.processor;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -34,11 +36,12 @@ public abstract class DocProcessor {
 		docRetriever = new DocumentRetriverImpl( rootDir );
 		executor = Executors.newCachedThreadPool();
 		this.maxConcurrent = maxConcurrent;
-		currentFutures = new ArrayList<Future<?>>();
+		currentFutures = new HashSet<Future<?>>();
 		//runs a futures thread that will run every 10 seconds that will clear out any futures
 		//that need removing
 		futuresMaintainer = Executors.newScheduledThreadPool(5);
 		futuresMaintainer.scheduleAtFixedRate(new LockMaintainer(), 0, 10, TimeUnit.SECONDS);
+		processed = new HashSet<String>();
 	}
 	/**
 	 * Handles iterating of documents
@@ -57,6 +60,8 @@ public abstract class DocProcessor {
 	protected final Object lock = new Object();
 	/* thread pool for handling clearing of futures */
 	protected final ScheduledExecutorService futuresMaintainer;
+	/* a set of titles to ensure no duplicate documents are processed by parallel threads: worse case scenario is around 4MM strings in memory */
+	private Set<String> processed;
 	/**
 	 * Enqueue a set number of documents for processing.
 	 * Note that this method will block if called excessively.
@@ -84,21 +89,33 @@ public abstract class DocProcessor {
 				synchronized( lock ) {
 					try {
 						lock.wait();
+
 					} catch (InterruptedException e) {
 						Thread.currentThread().interrupt();
 					}
 				}
 
 			}
-			final Document next = docRetriever.next();
 			count++;
 			Future<?> future = executor.submit(new Runnable() {
 
 				public void run() {
+					Document next = docRetriever.next();
+
 					if( log.isDebugEnabled() ) 
 						log.debug( " Added document " + next.getTitle() );
+					//ensure only one thread at a time
+					synchronized( processed ) {
+						if(! processed.contains(next.getTitle() ))
+							processDocument( next );
+					}
 
-					processDocument( next );
+					//ensure no duplicates processed
+					processed.add( next.getTitle() );
+
+					synchronized( lock ) {
+						lock.notify();
+					}
 				}
 
 			});
@@ -106,30 +123,16 @@ public abstract class DocProcessor {
 			if( future != null )
 				currentFutures.add( future );
 		}
+		shutdown();
 	}
-    /**
-     * Shutsdown the executors
-     */
+	/**
+	 * Shutsdown the executors
+	 */
 	public void shutdown() {
-		if( docRetriever.hasNext() ) {
-			log.warn("Jobs not finished, shutting down ");
-			executor.shutdownNow();
-			futuresMaintainer.shutdownNow();
-		}
-		else {
-			try {
-				if( !executor.awaitTermination(10000, TimeUnit.SECONDS) ) {
-					log.warn( "Couldn't shutdown..." );
-					executor.shutdownNow();
-				}
-				if( !futuresMaintainer.awaitTermination(10000, TimeUnit.SECONDS) ) {
-					log.warn( "Couldn't shutdown..." );
-					futuresMaintainer.shutdownNow();
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		}
+		log.info( "Shutting down..." );
+		executor.shutdownNow();
+		futuresMaintainer.shutdownNow();
+
 	}
 	public abstract void processDocument(Document document);
 
@@ -137,19 +140,18 @@ public abstract class DocProcessor {
 	private final class LockMaintainer implements Runnable {
 
 		public void run() {
-			while( !currentFutures.isEmpty() || currentFutures.size() < maxConcurrent ) {
-				Collection<Future<?>> remove = new ArrayList<Future<?>>();
-				for(Future<?> future : currentFutures ) {
-					if( future.isDone() ) 
-						remove.add( future );
-
-				}
-				currentFutures.removeAll( remove );
-				synchronized( lock ) {
-					lock.notify();
-				}
+			Collection<Future<?>> remove = new ArrayList<Future<?>>();
+			for(Future<?> future : currentFutures ) {
+				if( future.isDone() ) 
+					remove.add( future );
 
 			}
+			currentFutures.removeAll( remove );
+			synchronized( lock ) {
+				lock.notifyAll();
+			}
+
+
 		}
 	}
 }
